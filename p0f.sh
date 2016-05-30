@@ -78,8 +78,8 @@ fi
 P0F_OPTIONS_PKG="-u ${P0F_RUNAS} -o ${P0F_DATADIR}/p0f.log -s ${P0F_DATADIR}/p0f.sock"
 
 [ x"$DEBUG" != x ] && echo "=== p0f script running as: `id`; binary should change to ${P0F_RUNAS}"
-chown -R root:root "${P0F_DATADIR}"/p0f*
-#chown -R "${P0F_RUNAS}" "${P0F_DATADIR}"/
+#chown -R root:root "${P0F_DATADIR}"/p0f*
+chown -R "${P0F_RUNAS}" "${P0F_DATADIR}"/ || true
 
 PATH="`dirname $0`:$P0F_BINDIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:$PATH"
 LD_LIBRARY_PATH="/usr/ucblib:$LD_LIBRARY_PATH"
