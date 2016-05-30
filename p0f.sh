@@ -5,11 +5,14 @@
 ### Instructions for SMF integration are in the manifest file p0f-daemon.xml.
 ### It may also be used as the init-script for the service (tested only under
 ### Solaris, and suffers from its limited system shell syntax requirements).
+### Note: Even though it is a valid SMF method, it does not concern much about
+### neither SMF_FMRI, svcprops (config files in use for portability and easier
+### backup), nor including the SMF library (might only use the exit codes...)
 
 ###	=== LICENSE
 ###	This script is distributed under the following MIT License terms:
 ###
-###	Copyright (c) 2013-2014 by Jim Klimov, JSC COS&HT
+###	Copyright (c) 2013-2016 by Jim Klimov, JSC COS&HT
 ###	Published at:
 ###		https://github.com/jimklimov/p0f
 ###
@@ -42,8 +45,10 @@
 ### While the default "/var/tmp" should do the trick and let the service
 ### run with little hassle, it is probably insecure and should be changed
 ### to a dedicated directory in a particular installation.
-# [ x"$P0F_DATADIR" = x ] && P0F_DATADIR="/var/p0f"
-[ x"$P0F_DATADIR" = x ] && P0F_DATADIR="/var/tmp"
+[ x"$P0F_DATADIR" = x ] && \
+	for D in "/var/lib/p0f" "/var/p0f" "/var/tmp" "/tmp"; do
+		[ -d "$D" ] && P0F_DATADIR="$D" && break
+	done
 
 [ x"$P0F_BINDIR" = x ] && P0F_BINDIR="`dirname "$0"`"
 
@@ -64,7 +69,7 @@ P0F_BPF=""
 ### overrides for a particular host.
 if [ x"$P0F_OVERRIDE" != xno ]; then
 	for F in /etc/default/p0f.packaged /etc/default/p0f "$P0F_CONFIG"; do
-	    [ x"$F" != x ] && [ -s "$F" ] && \
+		[ x"$F" != x ] && [ -s "$F" ] && \
 		echo "Sourcing p0f config file: '$F'" && . "$F"
 	done
 fi
@@ -72,55 +77,58 @@ fi
 ### The basic set of options as provided in the package:
 P0F_OPTIONS_PKG="-u ${P0F_RUNAS} -o ${P0F_DATADIR}/p0f.log -s ${P0F_DATADIR}/p0f.sock"
 
-[ x"$DEBUG" != x ] && echo "=== Running as: `id`"
-chown -R root:root ${P0F_DATADIR}/p0f*
+[ x"$DEBUG" != x ] && echo "=== p0f script running as: `id`; binary should change to ${P0F_RUNAS}"
+chown -R root:root "${P0F_DATADIR}"/p0f*
+#chown -R "${P0F_RUNAS}" "${P0F_DATADIR}"/
 
-PATH="`dirname $0`:$P0F_BINDIR:/usr/local/bin:$PATH"
+PATH="`dirname $0`:$P0F_BINDIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:$PATH"
 LD_LIBRARY_PATH="/usr/ucblib:$LD_LIBRARY_PATH"
 export PATH LD_LIBRARY_PATH
 
 case "$1" in
-	start)	"$P0F_BIN" $P0F_OPTIONS_PKG $P0F_OPTIONS -d \
-		    ${P0F_BPF:+"$P0F_BPF"}
+	start)
+		"$P0F_BIN" $P0F_OPTIONS_PKG $P0F_OPTIONS -d \
+			${P0F_BPF:+"$P0F_BPF"}
 		;;
-	stop|restart)
-		_PID=`ps -ef | egrep -v 'grep|tail' | grep "$P0F_BIN" | awk '{ if ( $1 == "'${P0F_RUNAS}'" ) { print $2 } }'`
+	stop|restart) # Note: for the SMF exec-method a ":kill" suffices
+		_PID="`ps -ef | egrep -v 'grep|tail' | grep "$P0F_BIN" | awk '{ if ( $1 == "'${P0F_RUNAS}'" ) { print $2 } }'`"
 		RES=0
 		if [ x"$_PID" != x ]; then
 			echo "Stopping p0f process PID(s): $_PID ..."
 			kill -15 $_PID
-    		        RES=$?
+			RES=$?
 		fi
-                if [ x"$1" = xrestart ]; then
+		if [ x"$1" = xrestart ]; then
 			echo "Restarting p0f process..."
-                        "$P0F_BIN" $P0F_OPTIONS_PKG $P0F_OPTIONS -d \
-			    ${P0F_BPF:+"$P0F_BPF"}
-                        RES=$?
-                fi
-                exit $RES
-                ;;
-        state|status)
-		[ -x /bin/svcs ] && /bin/svcs -p p0f-daemon
-                ps -ef | egrep -v 'grep|tail' | \
-            	    awk '{ if ( $1 == "'"$P0F_RUNAS"'" ) { print $0 } }' | \
-		    grep "$P0F_BIN"
-		RES=$?
-		if [ "$RES" = 0 ]; then
-		    echo "Status: [--OK--]"
-		else
-		    echo "Status: [-FAIL-]"
+			"$P0F_BIN" $P0F_OPTIONS_PKG $P0F_OPTIONS -d \
+				${P0F_BPF:+"$P0F_BPF"}
+			RES=$?
 		fi
 		exit $RES
-                ;;
-        *)	if echo "$*" | egrep -i '(^| |\()(tcp|udp|src|dst|host|net|port)($| |\))' >/dev/null; then
-		    # Packet filtering rule is on command-line, override config
-		    "$P0F_BIN" $P0F_OPTIONS_PKG $P0F_OPTIONS "$@"
-		    RES=$?
+		;;
+	state|status)
+		[ -x /bin/svcs ] && /bin/svcs -p p0f-daemon
+		ps -ef | egrep -v 'grep|tail' | \
+			awk '{ if ( $1 == "'"$P0F_RUNAS"'" ) { print $0 } }' | \
+			grep "$P0F_BIN"
+		RES=$?
+		if [ "$RES" = 0 ]; then
+			echo "Status: [--OK--]"
 		else
-		    # Process command-line and use config default packet filter
-		    "$P0F_BIN" $P0F_OPTIONS_PKG $P0F_OPTIONS \
-			"$@" ${P0F_BPF:+"$P0F_BPF"}
-		    RES=$?
+			echo "Status: [-FAIL-]"
+		fi
+		exit $RES
+		;;
+	*) # Pass command-line to p0f after generic setup
+		if echo "$*" | egrep -i '(^| |\()(tcp|udp|src|dst|host|net|port)($| |\))' >/dev/null; then
+			# Packet filtering rule is on command-line, override config
+			"$P0F_BIN" $P0F_OPTIONS_PKG $P0F_OPTIONS "$@"
+			RES=$?
+		else
+			# Process command-line and use config default packet filter
+			"$P0F_BIN" $P0F_OPTIONS_PKG $P0F_OPTIONS \
+				"$@" ${P0F_BPF:+"$P0F_BPF"}
+			RES=$?
 		fi
 		exit $RES
 		;;
@@ -128,5 +136,7 @@ esac
 
 ### NOTE: To specify a BPF expression if one is in the config file already,
 ### use the override switch, i.e.
-###	P0F_OVERRIDE=no /usr/local/bin/p0f.sh 'host 4.2.2.4'
-### To daemonize use "-d" (or start as the single parameter)...
+### 	P0F_OVERRIDE=no /usr/sbin/p0f.sh 'host 4.2.2.4'
+### To daemonize use "-d" (or "start" as the single parameter)...
+
+exit 0

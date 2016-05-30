@@ -4,7 +4,7 @@
 	=== LICENSE
         This manifest is distributed under the following MIT License terms:
 
-	Copyright (c) 2013 Jim Klimov, JSC COS&HT
+	Copyright (c) 2013-2016 Jim Klimov, JSC COS&HT
 	Published at:
 		https://github.com/jimklimov/p0f
 
@@ -62,7 +62,7 @@
 
 	No reconfiguration is needed for an exclusive-IP zone nor the global
 	zone, this service manifest includes all the needed privileges for
-	the service (valid as of Solaris 10u10 release).
+	the service (statement valid as of Solaris 10u10 release).
 -->
 <service_bundle type='manifest' name='export'>
   <service name='network/p0f-daemon' type='service' version='0'>
@@ -92,16 +92,17 @@
       <service_fmri value='svc:/network/milter-greylist:default'/>
     </dependent>
 -->
-    <exec_method name='start' type='method' exec='/usr/local/bin/p0f.sh start' timeout_seconds='120'>
+    <exec_method name='start' type='method' exec='/usr/sbin/p0f.sh %m' timeout_seconds='120'>
       <method_context>
             <method_credential
             user='root'
             group='root'
             limit_privileges=':default'
 	    privileges='basic,net_icmpaccess,net_rawaccess,file_chown,file_owner,file_dac_write,proc_setid,proc_chroot'/>
-<!--	### The set of privileges above allows the SMF-ized daemon to access
-	### the low-level networking. Normally SMF services are prohibited
-	### from such intimacy with the OS in order to improve security. -->
+<!--   ### The set of privileges above allows the SMF-ized daemon to access
+       ### the low-level networking. Normally SMF services are prohibited
+       ### from such intimacy with the OS in order to improve security.
+       ### Note we start as "root" above and later drop privileges in script. -->
       </method_context>
     </exec_method>
     <exec_method name='stop' type='method' exec=':kill' timeout_seconds='60'>
@@ -122,7 +123,7 @@
         <loctext xml:lang='C'>p0f passive fingerprinter service</loctext>
       </common_name>
       <documentation>
-        <manpage title='p0f' section='8' manpath='/usr/local/man'/>
+        <manpage title='p0f' section='8' manpath='/usr/share/man'/>
       </documentation>
     </template>
   </service>
