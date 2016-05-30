@@ -38,6 +38,7 @@
 #  include <sys/stream.h>
 #  include <sys/dlpi.h>
 #  include <sys/bufmod.h>
+#  include <sys/stropts.h>
 # ifdef SOLARIS_UCB
 #    include "/usr/ucbinclude/sys/file.h"
 # else
@@ -117,6 +118,24 @@ int flock(int fd, int op) {
     return rc;
 }
 #endif
+/* snatched from Solaris snoop */
+static int
+strioctl(int fd, int cmd, int timout, int len, void *dp)
+{
+        struct  strioctl        sioc;
+        int     rc;
+
+        sioc.ic_cmd = cmd;
+        sioc.ic_timout = timout;
+        sioc.ic_len = len;
+        sioc.ic_dp = dp;
+        rc = ioctl(fd, I_STR, &sioc);
+
+        if (rc < 0)
+                return (rc);
+        else
+                return (sioc.ic_len);
+}
 #endif
 
 #ifndef PF_INET6
@@ -591,6 +610,18 @@ static void prepare_pcap(void) {
     if (!pt) FATAL("pcap_open_live: %s", pcap_err);
 
 #if defined (SOLARIS) || defined(__sun__)
+    { /* scope for Solaris */
+        int temp_fd = pcap_get_selectable_fd(pt);
+/* Snatched from Solaris snoop */
+#ifdef I_PUSH
+        SAYF("[+] Trying to enable bufmod for libpcap on Solaris\n");
+        if (ioctl(temp_fd, I_PUSH, "bufmod") < 0) {
+            if (ioctl(temp_fd, I_PUSH, "bufmod") < 0) {
+                SAYF("[-] ioctl() with I_PUSH \"bufmod\" returned an error (%d): %s\n",
+                    errno, strerror(errno) );
+            }
+        }
+#endif
 /*
  * When libpcap uses BPF we must enable "immediate mode" to
  * receive frames right away; otherwise the system may
@@ -599,39 +630,47 @@ static void prepare_pcap(void) {
  * and nmap: http://seclists.org/nmap-dev/2008/q3/284
  */
 #ifdef BIOCIMMEDIATE
-    {
-	unsigned int on = 1;
-	SAYF("[+] Trying to enable BIOCIMMEDIATE mode for libpcap\n");
-	if (ioctl(pt, BIOCIMMEDIATE, &on) < 0) {
-            FATAL("ioctl() with BIOCIMMEDIATE returned an error (%d): %s",
-                  errno, strerror(errno) );
-	}
-    }
-#endif /* BIOCIMMEDIATE */
+        { /* scope */
+            uint_t on = 1;
+            SAYF("[+] Trying to enable BIOCIMMEDIATE mode for libpcap\n");
+            if (ioctl(temp_fd, BIOCIMMEDIATE, &on) < 0) {
+                if (strioctl(temp_fd, BIOCIMMEDIATE, -1, sizeof (on), (char*) &on) < 0) {
+                    SAYF("[-] ioctl() with BIOCIMMEDIATE returned an error (%d): %s\n",
+                        errno, strerror(errno) );
+                }
+            }
+        } /* scope */
+#endif /* sun && BIOCIMMEDIATE */
 /*
  * Under Solaris, select() keeps waiting until the next packet,
  * because it is buffered, so we have to set timeout and
  * chunk size to zero
  */
-    {
-	int size_zero = 0;
-	struct timeval time_zero = {0, 0};
-	int temp_fd = pcap_get_selectable_fd(pt);
+        { /* scope */
+            uint_t size_zero = 0;
+            struct timeval time_zero = {0, 0};
 
 #ifdef SBIOCSCHUNK
-        SAYF("[+] Trying to enable SBIOCSCHUNK mode for libpcap\n");
-        if (ioctl(temp_fd, SBIOCSCHUNK, &size_zero) < 0)
-            FATAL("ioctl() with SBIOCSCHUNK returned an error (%d): %s",
-                  errno, strerror(errno) );
-#endif
+            SAYF("[+] Trying to enable SBIOCSCHUNK mode for libpcap\n");
+            if (ioctl(temp_fd, SBIOCSCHUNK, &size_zero) < 0) {
+                if (strioctl(temp_fd, SBIOCSCHUNK, -1, sizeof (size_zero), (char*) &size_zero) < 0) {
+                    SAYF("[-] ioctl() with SBIOCSCHUNK returned an error (%d): %s\n",
+                        errno, strerror(errno) );
+                }
+            }
+#endif /* sun && SBIOCSCHUNK */
 
 #ifdef SBIOCSTIME
-        SAYF("[+] Trying to enable SBIOCSTIME mode for libpcap\n");
-        if (ioctl(temp_fd, SBIOCSTIME, &time_zero) < 0)
-            FATAL("ioctl() with SBIOCSTIME returned an error (%d): %s",
-                  errno, strerror(errno) );
-#endif
-    }
+            SAYF("[+] Trying to enable SBIOCSTIME mode for libpcap\n");
+            if (ioctl(temp_fd, SBIOCSTIME, &time_zero) < 0) {
+                if (strioctl(temp_fd, SBIOCSTIME, -1, sizeof (time_zero), (char*) &time_zero) < 0) {
+                    SAYF("[-] ioctl() with SBIOCSTIME returned an error (%d): %s\n",
+                        errno, strerror(errno) );
+                }
+            }
+#endif /* sun && SBIOCSTIME */
+        } /* scope */
+    } /* scope for Solaris */
 #endif /* __sun__ */
 
   }
