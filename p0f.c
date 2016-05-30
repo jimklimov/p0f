@@ -118,6 +118,7 @@ int flock(int fd, int op) {
     return rc;
 }
 #endif
+
 /* snatched from Solaris snoop */
 static int
 strioctl(int fd, int cmd, int timout, int len, void *dp)
@@ -136,6 +137,7 @@ strioctl(int fd, int cmd, int timout, int len, void *dp)
         else
                 return (sioc.ic_len);
 }
+
 #endif
 
 #ifndef PF_INET6
