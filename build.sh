@@ -9,7 +9,7 @@
 #
 
 [ x"$PROGNAME" = x ] && PROGNAME="p0f"
-[ x"$VERSION" = x ] && VERSION="3.07b"
+[ x"$VERSION" = x ] && VERSION="3.08b"
 
 # Disable Solaris UCB by default: it may break the build until
 # this situation is better researched and debugged
