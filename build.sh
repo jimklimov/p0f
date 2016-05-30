@@ -8,8 +8,10 @@
 # Distributed under the terms and conditions of GNU LGPL.
 #
 
-[ x"$PROGNAME" = x ] && PROGNAME="p0f"
-[ x"$VERSION" = x ] && VERSION="3.09b"
+[ x"$PROGNAME" = x ] && \
+PROGNAME="p0f"
+[ x"$VERSION" = x ] && \
+VERSION="3.09b"
 
 # Disable Solaris UCB by default: it may break the build until
 # this situation is better researched and debugged
@@ -46,15 +48,17 @@ case "$OSTYPE" in
 		    BASIC_CFLAGS="$BASIC_CFLAGS -I."
 		    USE_CFLAGS="$USE_CFLAGS -I."
 		fi
+		UCBINCLUDES=""
 		if [ -f /usr/ucblib/libucb.so -a -d /usr/ucbinclude -a x"$SOLARIS_UCB" = x1 ]; then
 		    echo "[+] Enabling UCB support (very experimental, can fail the build)"
 		    USE_LIBS="-lucb $USE_LIBS"
 		    USE_CFLAGS="-I/usr/ucbinclude $USE_CFLAGS -L/usr/ucblib -DSOLARIS_UCB=1"
 		    BASIC_CFLAGS="-I/usr/ucbinclude $BASIC_CFLAGS -L/usr/ucblib -DSOLARIS_UCB=1"
+		    UCBINCLUDES="`ls -1 /usr/ucbinclude/{*,*/*}.h`"
 		fi
 		if ! grep isblank /usr/include/ctype.h \
 			/usr/include/iso/ctype*.h \
-			/usr/ucbinclude/{*,*/*}.h \
+			$UCBINCLUDES \
 			>/dev/null; \
 		then
 		    echo "[+] Overriding missing isblank() with isspace()"
